@@ -4,6 +4,18 @@ All notable changes to this theme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] — 2026-10-13
+
+### Changed
+
+- Regenerated the dark palette from the live Caelestia scheme (rose tonal scheme).
+
+### Added
+
+- `sync-scheme.mjs --watch` keeps the palette synced when the shell scheme
+  changes; `--vault <path>` copies the result into an Obsidian vault so the
+  theme hot-reloads automatically.
+
 ## [1.0.0] — 2026-10-12
 
 ### Added
