@@ -17,9 +17,9 @@
  * Only the block for the detected mode is rewritten.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,13 +32,20 @@ const THEME = join(ROOT, "theme.css");
 const argv = process.argv.slice(2);
 let mode = null;
 let file = null;
+let watchMode = false;
+let vault = null;
 
 for (let i = 0; i < argv.length; i++) {
   const arg = argv[i];
   if (arg === "--mode" || arg === "-m") mode = argv[++i];
+  else if (arg === "--watch" || arg === "-w") watchMode = true;
+  else if (arg === "--vault" || arg === "-d") vault = argv[++i];
   else if (arg === "--help" || arg === "-h") {
     console.log(
-      "Usage: node scripts/sync-scheme.mjs [--mode dark|light] [scheme.json]"
+      "Usage: node scripts/sync-scheme.mjs [--mode dark|light] [--watch] [--vault <path>] [scheme.json]"
+    );
+    console.log(
+      "  --watch    keep re-syncing when the scheme file changes\n  --vault    also copy theme.css into <vault>/.obsidian/themes/Caelestia/"
     );
     process.exit(0);
   } else file = arg;
@@ -58,19 +65,27 @@ const hex = (value) => {
   return /^[0-9a-f]{6}$/i.test(s) ? "#" + s.toLowerCase() : null;
 };
 
-const raw = JSON.parse(readFileSync(file, "utf8"));
-const colours = raw.colours && typeof raw.colours === "object" ? raw.colours : raw;
-mode = String(mode || raw.mode || "").toLowerCase();
+/* run-time state, refreshed on every sync (including watch reloads) */
+let colours = {};
+let blockMode = "";
+const used = { live: 0, fallback: 0 };
 
-if (!["dark", "light"].includes(mode)) {
-  console.error(
-    `✗ Could not determine mode (got "${mode}"). Pass --mode dark|light.`
-  );
-  process.exit(1);
-}
+function sync() {
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  colours = raw.colours && typeof raw.colours === "object" ? raw.colours : raw;
+  blockMode = String(mode || raw.mode || "").toLowerCase();
+
+  if (!["dark", "light"].includes(blockMode)) {
+    console.error(
+      `✗ Could not determine mode (got "${blockMode}"). Pass --mode dark|light.`
+    );
+    process.exit(1);
+  }
+
+  used.live = 0;
+  used.fallback = 0;
 
 /** First scheme key that resolves to a valid hex, else the fallback. */
-const used = { live: 0, fallback: 0 };
 const pick = (keys, fallback) => {
   for (const key of keys) {
     const value = hex(colours[key]);
@@ -151,8 +166,8 @@ const groups = [
       [["onSuccess", "base"], "on-success", "#213528"],
       [["successContainer", "surface1"], "success-container", "#374b3e"],
       [["onSuccessContainer", "text"], "on-success-container", "#d1e9d6"],
-      [[], "warning", mode === "light" ? "#7a5900" : "#e0a06a"],
-      [[], "on-warning", mode === "light" ? "#ffffff" : "#3f2e14"],
+      [[], "warning", blockMode === "light" ? "#7a5900" : "#e0a06a"],
+      [[], "on-warning", blockMode === "light" ? "#ffffff" : "#3f2e14"],
     ],
   },
   {
@@ -200,10 +215,10 @@ const groups = [
 /* emit                                                                        */
 /* -------------------------------------------------------------------------- */
 
-const start = `/* @caelestia:palette:${mode}:start */`;
-const end = `/* @caelestia:palette:${mode}:end */`;
+const start = `/* @caelestia:palette:${blockMode}:start */`;
+const end = `/* @caelestia:palette:${blockMode}:end */`;
 
-const lines = [start, `.theme-${mode} {`];
+const lines = [start, `.theme-${blockMode} {`];
 for (const group of groups) {
   lines.push(`  /* ${group.title} */`);
   for (const [keys, name, fallback] of group.vars) {
@@ -211,7 +226,7 @@ for (const group of groups) {
   }
   lines.push("");
 }
-lines.push(`  color-scheme: ${mode};`);
+lines.push(`  color-scheme: ${blockMode};`);
 lines.push("}");
 lines.push(end);
 const generated = lines.join("\n").replace(/\n\n(color-scheme)/, "\n$1");
@@ -225,19 +240,53 @@ const pattern = new RegExp(
 );
 
 if (!pattern.test(css)) {
-  console.error(`✗ Markers for "${mode}" not found in theme.css.`);
-  process.exit(1);
+    console.error(`✗ Markers for "${blockMode}" not found in theme.css.`);
+    process.exit(1);
+  }
+
+  css = css.replace(pattern, generated);
+  writeFileSync(THEME, css);
+
+  console.log(`✔ Synced ${blockMode} palette from ${file}`);
+  console.log(
+    `  ${used.live} colours from the scheme, ${used.fallback} from fallbacks.`
+  );
+  if (used.fallback > groups.length / 2) {
+    console.log(
+      "  Note: many fallbacks were used — the scheme may use unusual keys."
+    );
+  }
+
+  if (vault) {
+    const target = join(vault, ".obsidian", "themes", "Caelestia", "theme.css");
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, readFileSync(THEME, "utf8"));
+    console.log(`✔ Copied to ${target}`);
+  }
 }
 
-css = css.replace(pattern, generated);
-writeFileSync(THEME, css);
+/* -------------------------------------------------------------------------- */
+/* main                                                                        */
+/* -------------------------------------------------------------------------- */
 
-console.log(`✔ Synced ${mode} palette from ${file}`);
-console.log(
-  `  ${used.live} colours from the scheme, ${used.fallback} from fallbacks.`
-);
-if (used.fallback > groups.length / 2) {
-  console.log(
-    "  Note: many fallbacks were used — the scheme may use unusual keys."
-  );
+sync();
+
+if (watchMode) {
+  const dir = dirname(file);
+  console.log(`👀 Watching ${file} for scheme changes…`);
+  let timer = null;
+  watch(dir, (_event, name) => {
+    if (name && name !== basename(file)) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      console.log(
+        `\n[${new Date().toLocaleTimeString()}] scheme changed — re-syncing…`
+      );
+      try {
+        sync();
+      } catch (err) {
+        console.error("  ✗", err.message);
+      }
+    }, 300);
+  });
 }

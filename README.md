@@ -88,9 +88,16 @@ node scripts/sync-scheme.mjs --mode light scheme.json
 node scripts/sync-scheme.mjs ~/.cache/caelestia/schemes/<id>/content/default/dark.json
 ```
 
+**Keep it in sync automatically:**
+```sh
+# watch the live scheme, and copy straight into an Obsidian vault when it changes
+node scripts/sync-scheme.mjs --watch --vault ~/Documents/Obsidian\ Vault
+```
+Obsidian hot-reloads `theme.css`, so a wallpaper change in the shell flows into your
+notes within a second — no restart, no reinstall. Point `--vault` at any vault.
+
 The script understands both the state file and the flat per-mode files
-Caelestia caches, and only rewrites the block for the mode it detects. Wire it
-into a hook or a wallpaper-change script and your notes follow your wallpaper.
+Caelestia caches, and only rewrites the block for the mode it detects.
 
 ## Development
 
