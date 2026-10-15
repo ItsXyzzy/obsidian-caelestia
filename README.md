@@ -32,6 +32,7 @@ the same design tokens the shell uses.
   properties, tags, Bases (1.9+), Canvas, and graph.
 - **Sync script** — regenerate the palette from your live Caelestia scheme with
   one command.
+-**Persistant Sync** — Run the script to install a system service that will peristantly run to sync Obsidian with your scheme, perists after reboot
 
 ## Installation
 
@@ -98,6 +99,46 @@ notes within a second — no restart, no reinstall. Point `--vault` at any vault
 
 The script understands both the state file and the flat per-mode files
 Caelestia caches, and only rewrites the block for the mode it detects.
+
+## Keeping the theme in sync automatically (Linux, optional)
+
+`scripts/sync-scheme.mjs` reads your current Caelestia scheme and writes the matching colours into `theme.css`. Run with `--watch`, it re-syncs whenever the scheme changes (for example when you change wallpaper), but it needs a terminal left open. On systems that use systemd you can run it as a background service instead.
+
+### Install
+
+From the theme folder:
+
+```bash
+bash scripts/install-service.sh
+```
+
+This creates a systemd user service pointing at the script's current location, enables it, and starts it. It will start automatically each time you log in.
+
+Requirements: `node` in your `PATH`, and systemd.
+
+If the theme folder is not inside your vault's `.obsidian/themes/` directory, add `--vault /path/to/your/vault` to the `ExecStart` line in `~/.config/systemd/user/caelestia-obsidian-sync.service`, then run `systemctl --user daemon-reload && systemctl --user restart caelestia-obsidian-sync.service`.
+
+### Check it's working
+
+```bash
+systemctl --user status caelestia-obsidian-sync.service
+journalctl --user -u caelestia-obsidian-sync -f
+```
+
+Change your wallpaper and you should see the script re-sync in the log.
+
+### Notes
+
+- If the service starts before Caelestia has generated its scheme file (for example right after login), it will fail and retry every few seconds until the file exists. That is expected.
+- If you installed Node through a version manager such as nvm, the install script records the path to the `node` it finds when you run it. If you later change Node versions or managers, run the script again.
+
+### Uninstall
+
+```bash
+systemctl --user disable --now caelestia-obsidian-sync.service
+rm ~/.config/systemd/user/caelestia-obsidian-sync.service
+systemctl --user daemon-reload
+```
 
 ## Development
 
