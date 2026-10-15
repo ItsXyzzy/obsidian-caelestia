@@ -100,9 +100,9 @@ notes within a second — no restart, no reinstall. Point `--vault` at any vault
 The script understands both the state file and the flat per-mode files
 Caelestia caches, and only rewrites the block for the mode it detects.
 
-## Keeping the theme in sync automatically (Linux, optional)
+## Keeping the theme in sync automatically (optional)
 
-`scripts/sync-scheme.mjs` reads your current Caelestia scheme and writes the matching colours into `theme.css`. Run with `--watch`, it re-syncs whenever the scheme changes (for example when you change wallpaper), but it needs a terminal left open. On systems that use systemd you can run it as a background service instead.
+`scripts/sync-scheme.mjs` reads your current Caelestia scheme and writes the matching colours into `theme.css`. Run with `--watch` to re-sync whenever the scheme changes (for example, when you change your wallpaper), but it needs a terminal left open. On systems that use systemd like Caelestia, you can run it as a background service instead.
 
 ### Install
 
